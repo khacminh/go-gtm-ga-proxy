@@ -35,6 +35,7 @@ func googleTagManagerHandle(w http.ResponseWriter, r *http.Request, path string)
 	var headersToReturn http.Header
 	var usedCache bool
 	var endpointURI = settingsGGGP.EndpointURI
+	var cookieDomain = settingsGGGP.CookieDomain
 
 	if settingsGGGP.EndpointURI == "" {
 		endpointURI = r.Host
@@ -187,6 +188,9 @@ func googleTagManagerHandle(w http.ResponseWriter, r *http.Request, path string)
 		re = regexp.MustCompile(`www.google-analytics.com`)
 		body = re.ReplaceAll([]byte(body), []byte(endpointURI))
 
+		re = regexp.MustCompile(`google-analytics.com`)
+		body = re.ReplaceAll([]byte(body), []byte(cookieDomain))
+
 		re = regexp.MustCompile(`(\/)?analytics.js`)
 		body = re.ReplaceAll([]byte(body), []byte(`/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GaFilename))
 
@@ -195,6 +199,9 @@ func googleTagManagerHandle(w http.ResponseWriter, r *http.Request, path string)
 
 		re = regexp.MustCompile(`\/gtag\/js`)
 		body = re.ReplaceAll([]byte(body), []byte(`/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GtagFilename))
+
+		re = regexp.MustCompile(`/g/collect`)
+		body = re.ReplaceAll([]byte(body), []byte(settingsGGGP.GaCollectEndpointG))
 
 		if settingsGGGP.JsEnableMinify {
 			m := minify.New()

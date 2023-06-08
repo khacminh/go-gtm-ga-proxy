@@ -157,6 +157,12 @@ func googleAnalyticsJsHandle(w http.ResponseWriter, r *http.Request, path string
 		re = regexp.MustCompile(`www.google-analytics.com`)
 		body = re.ReplaceAll([]byte(body), []byte(endpointURI))
 
+		re = regexp.MustCompile(`google-analytics.com`)
+		body = re.ReplaceAll([]byte(body), []byte(cookieDomain))
+
+		// re = regexp.MustCompile(`(www\.)?google-analytics.com`)
+		// body = re.ReplaceAll([]byte(body), []byte(endpointURI))
+
 		re = regexp.MustCompile(`analytics.js`)
 		body = re.ReplaceAll([]byte(body), []byte(`/`+settingsGGGP.JsSubdirectory+`/`+settingsGGGP.GaFilename))
 
@@ -168,6 +174,9 @@ func googleAnalyticsJsHandle(w http.ResponseWriter, r *http.Request, path string
 
 		re = regexp.MustCompile(`\"/j\/collect`)
 		body = re.ReplaceAll([]byte(body), []byte(`"`+settingsGGGP.GaCollectEndpointJ))
+
+		re = regexp.MustCompile(`/g/collect`)
+		body = re.ReplaceAll([]byte(body), []byte(settingsGGGP.GaCollectEndpointG))
 
 		re = regexp.MustCompile(`\"/collect`)
 		body = re.ReplaceAll([]byte(body), []byte(`"`+settingsGGGP.GaCollectEndpoint))
@@ -301,6 +310,8 @@ func googleAnalyticsCollectHandle(w http.ResponseWriter, r *http.Request) {
 		clientURL = `https://www.google-analytics.com/r/collect`
 	case settingsGGGP.GaCollectEndpointJ:
 		clientURL = `https://www.google-analytics.com/j/collect`
+	case settingsGGGP.GaCollectEndpointG:
+		clientURL = `https://www.google-analytics.com/g/collect`
 	case settingsGGGP.GaCollectEndpoint:
 		fallthrough
 	default:
@@ -310,6 +321,8 @@ func googleAnalyticsCollectHandle(w http.ResponseWriter, r *http.Request) {
 	var req *http.Request
 	var err error
 	var bodyPayload = make(map[string]string)
+	var postReqUri string
+	var clientInfo string
 
 	switch r.Method {
 	case `GET`:
@@ -318,6 +331,7 @@ func googleAnalyticsCollectHandle(w http.ResponseWriter, r *http.Request) {
 		}
 	case `POST`:
 		postPayloadRaw, _ := ioutil.ReadAll(r.Body)
+		postReqUri = strings.Replace(r.URL.RequestURI(), r.URL.Path, "", 1)
 
 		postPayload := strings.Split(string(postPayloadRaw), `&`)
 
@@ -377,9 +391,11 @@ func googleAnalyticsCollectHandle(w http.ResponseWriter, r *http.Request) {
 			IPToRedirect = strings.TrimSpace(proxyHeaderIps[0])
 		}
 
-		formatPayLoad = formatPayLoad + `ua=` + url.QueryEscape(r.Header.Get(`User-Agent`)) + `&uip=` + url.QueryEscape(IPToRedirect)
+		clientInfo = `_ua=` + url.QueryEscape(r.Header.Get(`User-Agent`)) + `&_uip=` + url.QueryEscape(IPToRedirect)
+		formatPayLoad = formatPayLoad + clientInfo
 	} else {
-		formatPayLoad = formatPayLoad + `ua=` + url.QueryEscape(r.Header.Get(`User-Agent`)) + `&uip=` + url.QueryEscape(strings.Split(r.RemoteAddr, `:`)[0])
+		clientInfo = `_ua=` + url.QueryEscape(r.Header.Get(`User-Agent`)) + `&_uip=` + url.QueryEscape(strings.Split(r.RemoteAddr, `:`)[0])
+		formatPayLoad = formatPayLoad + clientInfo
 	}
 
 	switch r.Method {
@@ -394,6 +410,12 @@ func googleAnalyticsCollectHandle(w http.ResponseWriter, r *http.Request) {
 			fmt.Println(clientURL + `?` + formatPayLoad)
 		}
 	case `POST`:
+		if postReqUri != `` {
+			clientURL = clientURL + postReqUri
+		}
+		if clientInfo != `` {
+			clientURL = clientURL + "&" + clientInfo
+		}
 		req, err = http.NewRequest(`POST`, clientURL, bytes.NewBuffer([]byte(formatPayLoad)))
 		if err != nil {
 			fmt.Println(`Experienced problems on redirecting collect to google (POST). Aborting.`)
@@ -406,7 +428,8 @@ func googleAnalyticsCollectHandle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	req.Header.Set(`User-Agent`, `GoGtmGaProxy `+os.Getenv(`APP_VERSION`)+`; github.com/blaumedia/go-gtm-ga-proxy`)
+	// req.Header.Set(`User-Agent`, `GoGtmGaProxy `+os.Getenv(`APP_VERSION`)+`; github.com/khacminh/go-gtm-ga-proxy`)
+	req.Header.Set(`User-Agent`, r.Header.Get(`User-Agent`))
 	req.Header.Set(`Accept`, `*/*`)
 	req.Header.Set(`Content-Type`, `text/plain;charset=UTF-8`)
 
